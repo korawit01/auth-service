@@ -1,0 +1,26 @@
+# Binaries and build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+
+# Coverage and test outputs
+coverage/
+
+# Dependencies
+vendor/
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Environment/configuration overrides
+.env
+*.env
+.env.local
