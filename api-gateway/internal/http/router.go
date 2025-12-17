@@ -15,8 +15,11 @@ type Handler struct {
 	taskClient *client.TaskClient
 }
 
-func NewHandler(authClient *client.AuthClient) *Handler {
-	return &Handler{authClient: authClient}
+func NewHandler(authClient *client.AuthClient, taskClient *client.TaskClient) *Handler {
+	return &Handler{
+		authClient: authClient,
+		taskClient: taskClient,
+	}
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -31,25 +34,26 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/login", h.handleLogin)
 	r.Post("/tasks", h.handleCreateTask)
 
-	// Swagger docs
-	r.Mount("/swagger", http.StripPrefix("/swagger", SwaggerRoutes()))
+	// Swagger docs (live generated from annotations)
+	r.Handle("/swagger/*", SwaggerRoutes())
 
 	return r
 }
 
-type registerRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
+// handleRegister godoc
+// @Summary Register user
+// @Description Create a new user via auth-service.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body RegisterRequest true "User credentials"
+// @Success 200 {object} client.UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /register [post]
 func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	var req registerRequest
+	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
 		return
@@ -65,9 +69,20 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(user)
 }
 
+// handleLogin godoc
+// @Summary Login
+// @Description Login via auth-service and receive JWT.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "User credentials"
+// @Success 200 {object} TokenResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /login [post]
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	var req loginRequest
+	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
 		return
@@ -80,15 +95,23 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]string{"token": token})
+	_ = json.NewEncoder(w).Encode(TokenResponse{Token: token})
 }
 
+// handleCreateTask godoc
+// @Summary Create task
+// @Description Create a task via task-service.
+// @Tags tasks
+// @Accept json
+// @Produce json
+// @Param request body CreateTaskRequest true "Task payload"
+// @Success 201 {object} TaskResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /tasks [post]
 func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	var req struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-	}
+	var req CreateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
 		return
@@ -101,5 +124,6 @@ func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(task)
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
 }

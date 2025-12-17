@@ -4,6 +4,13 @@ setlocal
 rem Always run from the project root (location of this script)
 cd /d "%~dp0"
 
+echo Updating swagger docs for api-gateway...
+go generate .\api-gateway\cmd\api-gateway
+if errorlevel 1 (
+    echo Failed to generate swagger docs. Fix the issue before starting services.
+    exit /b 1
+)
+
 start "task-service" cmd /k "go run services\task-service\cmd\task-service\main.go"
 start "auth-service" cmd /k "go run services\auth-service\cmd\auth-service\main.go"
 start "api-gateway" cmd /k "go run api-gateway\cmd\api-gateway\main.go"

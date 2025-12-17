@@ -17,6 +17,16 @@ type TaskClient struct {
 	httpClient *http.Client
 }
 
+type TaskResponse struct {
+	ID          int64      `json:"id"`
+	Title       string     `json:"title"`
+	Description *string    `json:"description,omitempty"`
+	Status      string     `json:"status"`
+	DueDate     *time.Time `json:"dueDate,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
 func NewTaskClient(baseURL string) *TaskClient {
 	return &TaskClient{
 		baseURL:    baseURL,
@@ -40,7 +50,7 @@ func (c *TaskClient) Health(ctx context.Context) error {
 	return nil
 }
 
-func (c *TaskClient) CreateTask(ctx context.Context, title, description string) (string, error) {
+func (c *TaskClient) CreateTask(ctx context.Context, title, description string) (*TaskResponse, error) {
 	payload := map[string]string{
 		"title":       title,
 		"description": description,
@@ -49,25 +59,30 @@ func (c *TaskClient) CreateTask(ctx context.Context, title, description string) 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/tasks", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("create task failed: %s: %s", resp.Status, strings.TrimSpace(string(bodyBytes)))
-	}	
-	// Implementation for creating a task would go here.
-	return "", nil
+		return nil, fmt.Errorf("create task failed: %s: %s", resp.Status, strings.TrimSpace(string(bodyBytes)))
+	}
+
+	var task TaskResponse
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, err
+	}
+
+	return &task, nil
 }
 
-func (c *TaskClient) GetTask(ctx context.Context, id int64) (string, error) {
+func (c *TaskClient) GetTask(ctx context.Context, id int64) (*TaskResponse, error) {
 	// Implementation for getting a task would go here.
-	return "", nil
+	return nil, nil
 }

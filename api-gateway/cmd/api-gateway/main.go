@@ -1,3 +1,10 @@
+// @title Taskboard API Gateway
+// @version 1.0
+// @description API Gateway proxying auth-service and task-service.
+// @BasePath /
+// @schemes http
+//
+//go:generate go run github.com/swaggo/swag/cmd/swag@v1.16.6 init --parseInternal --parseDependency --dir .,../../internal/http,../../internal/client --generalInfo main.go --output ../../internal/http/docs
 package main
 
 import (
@@ -6,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -13,14 +21,17 @@ import (
 
 	"github.com/korawit01/auth-service/api-gateway/internal/client"
 	myhttp "github.com/korawit01/auth-service/api-gateway/internal/http"
+	"github.com/korawit01/auth-service/api-gateway/internal/http/docs"
 )
 
 func main() {
 	addr := envOrDefault("GATEWAY_ADDR", ":8080")
 	authURL := envOrDefault("AUTH_SERVICE_URL", "http://localhost:8081/auth")
+	taskURL := envOrDefault("TASK_SERVICE_URL", "http://localhost:8082")
 
 	authClient := client.NewAuthClient(authURL)
-	handler := myhttp.NewHandler(authClient)
+	taskClient := client.NewTaskClient(taskURL)
+	handler := myhttp.NewHandler(authClient, taskClient)
 
 	r := chi.NewRouter()
 	r.Mount("/", handler.Routes())
@@ -29,6 +40,9 @@ func main() {
 		Addr:    addr,
 		Handler: r,
 	}
+
+	docs.SwaggerInfo.BasePath = "/"
+	docs.SwaggerInfo.Host = swaggerHost(addr)
 
 	go func() {
 		log.Printf("api-gateway listening on %s", addr)
@@ -53,4 +67,23 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func swaggerHost(addr string) string {
+	if host := os.Getenv("GATEWAY_SWAGGER_HOST"); host != "" {
+		return host
+	}
+
+	trimmed := strings.TrimPrefix(addr, ":")
+	if strings.Contains(addr, ":") && !strings.Contains(addr, "://") {
+		if strings.HasPrefix(addr, ":") {
+			return "localhost" + addr
+		}
+		return addr
+	}
+
+	if trimmed == "" {
+		return "localhost:8080"
+	}
+	return "localhost:" + trimmed
 }
