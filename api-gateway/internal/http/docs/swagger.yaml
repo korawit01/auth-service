@@ -130,6 +130,34 @@ paths:
       tags:
       - auth
   /tasks:
+    get:
+      description: List tasks belonging to the provided user.
+      parameters:
+      - description: User ID
+        in: header
+        name: X-User-ID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/http.TaskResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List tasks
+      tags:
+      - tasks
     post:
       consumes:
       - application/json

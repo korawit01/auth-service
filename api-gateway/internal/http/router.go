@@ -35,6 +35,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/register", h.handleRegister)
 	r.Post("/login", h.handleLogin)
 	r.Post("/tasks", h.handleCreateTask)
+	r.Get("/tasks", h.handleGetTasks)
 
 	// Swagger docs (live generated from annotations)
 	r.Handle("/swagger/*", SwaggerRoutes())
@@ -140,4 +141,47 @@ func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
+}
+
+// handleGetTasks godoc
+// @Summary List tasks
+// @Description List tasks belonging to the provided user.
+// @Tags tasks
+// @Produce json
+// @Param X-User-ID header string true "User ID"
+// @Success 200 {array} TaskResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /tasks [get]
+func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Header.Get("X-User-ID")
+	if strings.TrimSpace(userID) == "" {
+		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+		return
+	}
+
+	task, err := h.taskClient.GetTasks(r.Context(), userID)
+	if err != nil {
+		log.Printf("get tasks error: %v", err)
+		if te, ok := err.(*client.TaskError); ok {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"get tasks failed: %s"}`, err.Error()), http.StatusBadGateway)
+		return
+	}
+
+	var res []TaskResponse
+	if task != nil {
+		res = make([]TaskResponse, len(*task))
+		for i, t := range *task {
+			res[i] = TaskResponse(t)
+		}
+	} else {
+		res = []TaskResponse{}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
 }

@@ -1,0 +1,12 @@
+.git
+**/bin
+**/vendor
+**/node_modules
+**/.env
+**/dist
+**/tmp
+**/*.log
+**/__pycache__
+**/.DS_Store
+**/.idea
+**/.vscode

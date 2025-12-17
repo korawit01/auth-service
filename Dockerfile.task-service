@@ -1,0 +1,16 @@
+FROM golang:1.25.4 AS builder
+
+WORKDIR /workspace
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+WORKDIR /workspace/services/task-service
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /bin/task-service ./cmd/task-service
+
+FROM gcr.io/distroless/base-debian12
+ENV TASK_HTTP_ADDR=:8082
+ENV DATABASE_URL=postgres://postgres:postgres@db:5432/go_micro_task_board?sslmode=disable
+COPY --from=builder /bin/task-service /usr/local/bin/task-service
+EXPOSE 8082
+ENTRYPOINT ["/usr/local/bin/task-service"]

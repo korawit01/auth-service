@@ -100,7 +100,36 @@ func (c *TaskClient) CreateTask(ctx context.Context, userID, title, description 
 	return &task, nil
 }
 
-func (c *TaskClient) GetTask(ctx context.Context, id int64) (*TaskResponse, error) {
-	// Implementation for getting a task would go here.
-	return nil, nil
+func (c *TaskClient) GetTasks(ctx context.Context, userID string) (*[]TaskResponse, error) {
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/tasks", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", strings.TrimSpace(userID))
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		msg := strings.TrimSpace(string(bodyBytes))
+		if msg == "" {
+			msg = "task service returned empty body"
+		}
+		return nil, &TaskError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("task service error (%s): %s", resp.Status, msg),
+		}
+	}
+
+	var task[] TaskResponse
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, err
+	}
+	
+	return &task, nil
 }

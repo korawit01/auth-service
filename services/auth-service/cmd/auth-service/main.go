@@ -79,8 +79,9 @@ func main() {
 
 func ensureSchema(ctx context.Context, db *sql.DB) error {
 	const createUsers = `
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS public.users (
-    id SERIAL PRIMARY KEY,
+    row_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -4,17 +4,11 @@ setlocal
 rem Always run from the project root (location of this script)
 cd /d "%~dp0"
 
-echo Updating swagger docs for api-gateway...
-go generate .\api-gateway\cmd\api-gateway
+echo Starting stack with Docker Compose...
+docker compose version >nul 2>&1
 if errorlevel 1 (
-    echo Failed to generate swagger docs. Fix the issue before starting services.
+    echo docker compose not found. Please install Docker Desktop (with Compose V2) and try again.
     exit /b 1
 )
 
-start "task-service" cmd /k "go run services\task-service\cmd\task-service\main.go"
-start "auth-service" cmd /k "go run services\auth-service\cmd\auth-service\main.go"
-start "api-gateway" cmd /k "go run api-gateway\cmd\api-gateway\main.go"
-
-echo Started task-service, auth-service, and api-gateway in separate windows.
-echo Close each window or hit Ctrl+C in it to stop the service.
-pause >nul
+docker compose up --build
