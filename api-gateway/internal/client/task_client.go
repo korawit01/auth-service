@@ -17,8 +17,18 @@ type TaskClient struct {
 	httpClient *http.Client
 }
 
+// TaskError captures upstream status and message for clearer error reporting.
+type TaskError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *TaskError) Error() string {
+	return e.Message
+}
+
 type TaskResponse struct {
-	ID          int64      `json:"id"`
+	RowID       string     `json:"row_id"`
 	Title       string     `json:"title"`
 	Description *string    `json:"description,omitempty"`
 	Status      string     `json:"status"`
@@ -72,7 +82,14 @@ func (c *TaskClient) CreateTask(ctx context.Context, userID, title, description 
 
 	if resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("create task failed: %s: %s", resp.Status, strings.TrimSpace(string(bodyBytes)))
+		msg := strings.TrimSpace(string(bodyBytes))
+		if msg == "" {
+			msg = "task service returned empty body"
+		}
+		return nil, &TaskError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("task service error (%s): %s", resp.Status, msg),
+		}
 	}
 
 	var task TaskResponse

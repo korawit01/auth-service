@@ -24,21 +24,21 @@ func (r *userRepo) Create(ctx context.Context, u *domain.User) error {
 	query := `
 		INSERT INTO public.users (email, password_hash)
 		VALUES ($1, $2)
-		RETURNING id, created_at
+		RETURNING row_id, created_at
 	`
 	return r.db.QueryRowContext(ctx, query, u.Email, u.Password).
-		Scan(&u.ID, &u.CreatedAt)
+		Scan(&u.RowId, &u.CreatedAt)
 }
 
 func (r *userRepo) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var u domain.User
 	query := `
-		SELECT id, email, password_hash, created_at
+		SELECT row_id, email, password_hash, created_at
 		FROM public.users
 		WHERE email = $1
 	`
 	err := r.db.QueryRowContext(ctx, query, email).
-		Scan(&u.ID, &u.Email, &u.Password, &u.CreatedAt)
+		Scan(&u.RowId, &u.Email, &u.Password, &u.CreatedAt)
 
 	if err != nil {
 		return nil, err

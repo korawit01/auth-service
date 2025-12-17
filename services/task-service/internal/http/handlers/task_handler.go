@@ -3,8 +3,9 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -16,16 +17,12 @@ import (
 
 var ErrUnauthorized = errors.New("unauthorized")
 
-func getUserIDFromHeader(r *http.Request) (int64, error) {
+func getUserIDFromHeader(r *http.Request) (string, error) {
 	idStr := r.Header.Get("X-User-ID")
-	if idStr == "" {
-		return 0, ErrUnauthorized
+	if strings.TrimSpace(idStr) == "" {
+		return "", ErrUnauthorized
 	}
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, ErrUnauthorized
-	}
-	return id, nil
+	return idStr, nil
 }
 
 type TaskHandler struct {
@@ -81,13 +78,7 @@ func (h *TaskHandler) getTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := chi.URLParam(r, "id")
-	taskID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		httpErrorStatus(w, http.StatusBadRequest, "invalid id")
-		return
-	}
-
-	task, err := h.svc.GetTask(r.Context(), userID, taskID)
+	task, err := h.svc.GetTask(r.Context(), userID, idStr)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			httpErrorStatus(w, http.StatusNotFound, "task not found")
@@ -153,12 +144,6 @@ func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := chi.URLParam(r, "id")
-	taskID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		httpErrorStatus(w, http.StatusBadRequest, "invalid id")
-		return
-	}
-
 	var req updateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpErrorStatus(w, http.StatusBadRequest, "invalid JSON")
@@ -192,7 +177,7 @@ func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
 		DueDate:     due,
 	}
 
-	task, err := h.svc.UpdateTask(r.Context(), userID, taskID, input)
+	task, err := h.svc.UpdateTask(r.Context(), userID, idStr, input)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			httpErrorStatus(w, http.StatusNotFound, "task not found")
@@ -216,13 +201,7 @@ func (h *TaskHandler) deleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := chi.URLParam(r, "id")
-	taskID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		httpErrorStatus(w, http.StatusBadRequest, "invalid id")
-		return
-	}
-
-	if err := h.svc.DeleteTask(r.Context(), userID, taskID); err != nil {
+	if err := h.svc.DeleteTask(r.Context(), userID, idStr); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			httpErrorStatus(w, http.StatusNotFound, "task not found")
 			return
@@ -246,7 +225,9 @@ func httpError(w http.ResponseWriter, err error) {
 		httpErrorStatus(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	httpErrorStatus(w, http.StatusInternalServerError, "internal error")
+	// Surface the actual error to aid debugging (consider tightening for prod).
+	log.Printf("handler error: %v", err)
+	httpErrorStatus(w, http.StatusInternalServerError, err.Error())
 }
 
 func httpErrorStatus(w http.ResponseWriter, status int, msg string) {

@@ -51,5 +51,5 @@ func (s *userService) Login(ctx context.Context, email, password string) (string
 	}
 
 	// build JWT token for the authenticated user
-	return s.tokenProv.Generate(u.ID, u.Email)
+	return s.tokenProv.Generate(u.RowId, u.Email)
 }

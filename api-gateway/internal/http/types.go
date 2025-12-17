@@ -26,7 +26,7 @@ type ErrorResponse struct {
 }
 
 type TaskResponse struct {
-	ID          int64      `json:"id"`
+	RowID       string     `json:"row_id"`
 	Title       string     `json:"title"`
 	Description *string    `json:"description,omitempty"`
 	Status      string     `json:"status"`

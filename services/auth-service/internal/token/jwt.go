@@ -9,13 +9,13 @@ import (
 
 // Provider exposes token generation/validation.
 type Provider interface {
-	Generate(userID int64, email string) (string, error)
+	Generate(userID string, email string) (string, error)
 	Verify(tokenStr string) (*Claims, error)
 }
 
 // Claims represents the JWT payload.
 type Claims struct {
-	UserID int64  `json:"user_id"`
+	UserID string `json:"user_id"`
 	Email  string `json:"email"`
 	jwt.RegisteredClaims
 }
@@ -35,7 +35,7 @@ func NewJWTProvider(secret string) Provider {
 	}
 }
 
-func (p *JWTProvider) Generate(userID int64, email string) (string, error) {
+func (p *JWTProvider) Generate(userID string, email string) (string, error) {
 	claims := &Claims{
 		UserID: userID,
 		Email:  email,

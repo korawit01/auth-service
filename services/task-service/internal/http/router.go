@@ -16,9 +16,7 @@ func NewRouter(taskHandler *handlers.TaskHandler) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	r.Route("/api", func(api chi.Router) {
-		taskHandler.RegisterRoutes(api)
-	})
+	taskHandler.RegisterRoutes(r)
 
 	return r
 }

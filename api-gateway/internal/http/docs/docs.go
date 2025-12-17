@@ -241,8 +241,8 @@ const docTemplate = `{
                 "dueDate": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "integer"
+                "row_id": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"

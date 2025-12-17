@@ -11,8 +11,8 @@ const (
 )
 
 type Task struct {
-	ID          int64      `db:"id" json:"id"`
-	UserID      int64      `db:"user_id" json:"-"`
+	RowId       string     `db:"row_id" json:"row_id"`
+	UserID      string     `db:"user_id" json:"-"`
 	Title       string     `db:"title" json:"title"`
 	Description *string    `db:"description" json:"description,omitempty"`
 	Status      TaskStatus `db:"status" json:"status"`

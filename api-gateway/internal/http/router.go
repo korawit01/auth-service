@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -129,7 +130,11 @@ func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	task, err := h.taskClient.CreateTask(r.Context(), userID, req.Title, req.Description)
 	if err != nil {
 		log.Printf("create task error: %v", err)
-		http.Error(w, `{"error":"create task failed"}`, http.StatusBadGateway)
+		if te, ok := err.(*client.TaskError); ok {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"create task failed: %s"}`, err.Error()), http.StatusBadGateway)
 		return
 	}
 

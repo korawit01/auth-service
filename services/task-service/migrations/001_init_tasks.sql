@@ -1,6 +1,8 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS tasks (
-    id          BIGSERIAL PRIMARY KEY,
-    user_id     BIGINT      NOT NULL, -- เจ้าของ task
+    row_id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL,
     title       TEXT        NOT NULL,
     description TEXT        NULL,
     status      TEXT        NOT NULL DEFAULT 'todo', -- todo / in_progress / done

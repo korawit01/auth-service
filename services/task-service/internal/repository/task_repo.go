@@ -12,11 +12,11 @@ import (
 var ErrNotFound = errors.New("task not found")
 
 type TaskRepository interface {
-	ListByUser(ctx context.Context, userID int64) ([]*domain.Task, error)
-	GetByID(ctx context.Context, userID, taskID int64) (*domain.Task, error)
+	ListByUser(ctx context.Context, userID string) ([]*domain.Task, error)
+	GetByID(ctx context.Context, userID, taskID string) (*domain.Task, error)
 	Create(ctx context.Context, t *domain.Task) error
 	Update(ctx context.Context, t *domain.Task) error
-	Delete(ctx context.Context, userID, taskID int64) error
+	Delete(ctx context.Context, userID, taskID string) error
 }
 
 type taskRepo struct {
@@ -27,9 +27,9 @@ func NewTaskRepo(db *sql.DB) TaskRepository {
 	return &taskRepo{db: db}
 }
 
-func (r *taskRepo) ListByUser(ctx context.Context, userID int64) ([]*domain.Task, error) {
+func (r *taskRepo) ListByUser(ctx context.Context, userID string) ([]*domain.Task, error) {
 	query := `
-		SELECT id, user_id, title, description, status, due_date, created_at, updated_at
+		SELECT row_id, user_id, title, description, status, due_date, created_at, updated_at
 		FROM public.tasks
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -44,7 +44,7 @@ func (r *taskRepo) ListByUser(ctx context.Context, userID int64) ([]*domain.Task
 	for rows.Next() {
 		var t domain.Task
 		err := rows.Scan(
-			&t.ID, &t.UserID, &t.Title, &t.Description,
+			&t.RowId, &t.UserID, &t.Title, &t.Description,
 			&t.Status, &t.DueDate, &t.CreatedAt, &t.UpdatedAt,
 		)
 		if err != nil {
@@ -55,15 +55,15 @@ func (r *taskRepo) ListByUser(ctx context.Context, userID int64) ([]*domain.Task
 	return tasks, rows.Err()
 }
 
-func (r *taskRepo) GetByID(ctx context.Context, userID, taskID int64) (*domain.Task, error) {
+func (r *taskRepo) GetByID(ctx context.Context, userID, taskID string) (*domain.Task, error) {
 	query := `
-		SELECT id, user_id, title, description, status, due_date, created_at, updated_at
+		SELECT row_id, user_id, title, description, status, due_date, created_at, updated_at
 		FROM public.tasks
-		WHERE id = $1 AND user_id = $2
+		WHERE row_id = $1 AND user_id = $2
 	`
 	var t domain.Task
 	err := r.db.QueryRowContext(ctx, query, taskID, userID).Scan(
-		&t.ID, &t.UserID, &t.Title, &t.Description,
+		&t.RowId, &t.UserID, &t.Title, &t.Description,
 		&t.Status, &t.DueDate, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -79,12 +79,12 @@ func (r *taskRepo) Create(ctx context.Context, t *domain.Task) error {
 	query := `
 		INSERT INTO public.tasks (user_id, title, description, status, due_date)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_at, updated_at
+		RETURNING row_id, created_at, updated_at
 	`
 	return r.db.QueryRowContext(
 		ctx, query,
 		t.UserID, t.Title, t.Description, t.Status, t.DueDate,
-	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.RowId, &t.CreatedAt, &t.UpdatedAt)
 }
 
 func (r *taskRepo) Update(ctx context.Context, t *domain.Task) error {
@@ -96,12 +96,12 @@ func (r *taskRepo) Update(ctx context.Context, t *domain.Task) error {
 		    status = $3,
 		    due_date = $4,
 		    updated_at = $5
-		WHERE id = $6 AND user_id = $7
+		WHERE row_id = $6 AND user_id = $7
 	`
 	res, err := r.db.ExecContext(
 		ctx, query,
 		t.Title, t.Description, t.Status, t.DueDate, t.UpdatedAt,
-		t.ID, t.UserID,
+		t.RowId, t.UserID,
 	)
 	if err != nil {
 		return err
@@ -116,8 +116,8 @@ func (r *taskRepo) Update(ctx context.Context, t *domain.Task) error {
 	return nil
 }
 
-func (r *taskRepo) Delete(ctx context.Context, userID, taskID int64) error {
-	query := `DELETE FROM public.tasks WHERE id = $1 AND user_id = $2`
+func (r *taskRepo) Delete(ctx context.Context, userID, taskID string) error {
+	query := `DELETE FROM public.tasks WHERE row_id = $1 AND user_id = $2`
 	res, err := r.db.ExecContext(ctx, query, taskID, userID)
 	if err != nil {
 		return err
@@ -128,4 +128,3 @@ func (r *taskRepo) Delete(ctx context.Context, userID, taskID int64) error {
 	}
 	return nil
 }
-

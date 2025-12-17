@@ -27,7 +27,7 @@ import (
 func main() {
 	addr := envOrDefault("GATEWAY_ADDR", ":8080")
 	authURL := envOrDefault("AUTH_SERVICE_URL", "http://localhost:8081/auth")
-	taskURL := envOrDefault("TASK_SERVICE_URL", "http://localhost:8082")
+	taskURL := envOrDefault("TASK_SERVICE_URL", "http://localhost:8082/api")
 
 	authClient := client.NewAuthClient(authURL)
 	taskClient := client.NewTaskClient(taskURL)

@@ -14,11 +14,11 @@ var (
 )
 
 type TaskService interface {
-	ListTasks(ctx context.Context, userID int64) ([]*domain.Task, error)
-	GetTask(ctx context.Context, userID, taskID int64) (*domain.Task, error)
-	CreateTask(ctx context.Context, userID int64, input CreateTaskInput) (*domain.Task, error)
-	UpdateTask(ctx context.Context, userID, taskID int64, input UpdateTaskInput) (*domain.Task, error)
-	DeleteTask(ctx context.Context, userID, taskID int64) error
+	ListTasks(ctx context.Context, userID string) ([]*domain.Task, error)
+	GetTask(ctx context.Context, userID, taskID string) (*domain.Task, error)
+	CreateTask(ctx context.Context, userID string, input CreateTaskInput) (*domain.Task, error)
+	UpdateTask(ctx context.Context, userID, taskID string, input UpdateTaskInput) (*domain.Task, error)
+	DeleteTask(ctx context.Context, userID, taskID string) error
 }
 
 type taskService struct {
@@ -53,15 +53,15 @@ func validateStatus(s domain.TaskStatus) bool {
 	}
 }
 
-func (s *taskService) ListTasks(ctx context.Context, userID int64) ([]*domain.Task, error) {
+func (s *taskService) ListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
 	return s.repo.ListByUser(ctx, userID)
 }
 
-func (s *taskService) GetTask(ctx context.Context, userID, taskID int64) (*domain.Task, error) {
+func (s *taskService) GetTask(ctx context.Context, userID, taskID string) (*domain.Task, error) {
 	return s.repo.GetByID(ctx, userID, taskID)
 }
 
-func (s *taskService) CreateTask(ctx context.Context, userID int64, input CreateTaskInput) (*domain.Task, error) {
+func (s *taskService) CreateTask(ctx context.Context, userID string, input CreateTaskInput) (*domain.Task, error) {
 	status := input.Status
 	if status == "" {
 		status = domain.StatusTodo
@@ -83,7 +83,7 @@ func (s *taskService) CreateTask(ctx context.Context, userID int64, input Create
 	return t, nil
 }
 
-func (s *taskService) UpdateTask(ctx context.Context, userID, taskID int64, input UpdateTaskInput) (*domain.Task, error) {
+func (s *taskService) UpdateTask(ctx context.Context, userID, taskID string, input UpdateTaskInput) (*domain.Task, error) {
 	t, err := s.repo.GetByID(ctx, userID, taskID)
 	if err != nil {
 		return nil, err
@@ -111,6 +111,6 @@ func (s *taskService) UpdateTask(ctx context.Context, userID, taskID int64, inpu
 	return t, nil
 }
 
-func (s *taskService) DeleteTask(ctx context.Context, userID, taskID int64) error {
+func (s *taskService) DeleteTask(ctx context.Context, userID, taskID string) error {
 	return s.repo.Delete(ctx, userID, taskID)
 }
