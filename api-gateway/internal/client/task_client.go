@@ -29,7 +29,7 @@ type TaskResponse struct {
 
 func NewTaskClient(baseURL string) *TaskClient {
 	return &TaskClient{
-		baseURL:    baseURL,
+		baseURL:    strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{Timeout: 5 * time.Second},
 	}
 }
@@ -50,7 +50,7 @@ func (c *TaskClient) Health(ctx context.Context) error {
 	return nil
 }
 
-func (c *TaskClient) CreateTask(ctx context.Context, title, description string) (*TaskResponse, error) {
+func (c *TaskClient) CreateTask(ctx context.Context, userID, title, description string) (*TaskResponse, error) {
 	payload := map[string]string{
 		"title":       title,
 		"description": description,
@@ -62,6 +62,7 @@ func (c *TaskClient) CreateTask(ctx context.Context, title, description string) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", strings.TrimSpace(userID))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

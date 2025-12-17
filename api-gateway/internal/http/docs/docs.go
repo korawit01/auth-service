@@ -122,6 +122,13 @@ const docTemplate = `{
                 "summary": "Create task",
                 "parameters": [
                     {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "X-User-ID",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
                         "description": "Task payload",
                         "name": "request",
                         "in": "body",
@@ -140,6 +147,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/http.ErrorResponse"
                         }

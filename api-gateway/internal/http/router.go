@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -104,20 +105,28 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 // @Tags tasks
 // @Accept json
 // @Produce json
+// @Param X-User-ID header string true "User ID"
 // @Param request body CreateTaskRequest true "Task payload"
 // @Success 201 {object} TaskResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /tasks [post]
 func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	userID := r.Header.Get("X-User-ID")
+	if strings.TrimSpace(userID) == "" {
+		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+		return
+	}
+
 	var req CreateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
 		return
 	}
 
-	task, err := h.taskClient.CreateTask(r.Context(), req.Title, req.Description)
+	task, err := h.taskClient.CreateTask(r.Context(), userID, req.Title, req.Description)
 	if err != nil {
 		log.Printf("create task error: %v", err)
 		http.Error(w, `{"error":"create task failed"}`, http.StatusBadGateway)
