@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -28,18 +27,17 @@ func (h *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
 	r.Post("/register", h.handleRegister)
 	r.Post("/login", h.handleLogin)
 
-	r.Post("/task", h.handleCreateTask)
+	r.Post("/tasks", h.handleCreateTask)
 	r.Get("/tasks", h.handleGetTasks)
-	r.Get("/task/{id}", h.handleGetTask)
-	r.Put("/task/{id}", h.handleUpdateTask)
-	r.Delete("/task/{id}", h.handleDeleteTask)
+	r.Get("/tasks/{id}", h.handleGetTask)
+	r.Put("/tasks/{id}", h.handleUpdateTask)
+	r.Delete("/tasks/{id}", h.handleDeleteTask)
 
 	// Swagger docs (live generated from annotations)
 	r.Handle("/swagger/*", SwaggerRoutes())
@@ -59,21 +57,20 @@ func (h *Handler) Routes() http.Handler {
 // @Failure 502 {object} ErrorResponse
 // @Router /register [post]
 func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
 	user, err := h.authClient.Register(r.Context(), req.Email, req.Password)
 	if err != nil {
 		log.Printf("register error: %v", err)
-		http.Error(w, `{"error":"register failed"}`, http.StatusBadGateway)
+		writeError(w, http.StatusBadGateway, "register failed")
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(user)
+	writeJSON(w, http.StatusOK, user)
 }
 
 // handleLogin godoc
@@ -88,21 +85,20 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 // @Failure 502 {object} ErrorResponse
 // @Router /login [post]
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
 	token, err := h.authClient.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		log.Printf("login error: %v", err)
-		http.Error(w, `{"error":"login failed"}`, http.StatusBadGateway)
+		writeError(w, http.StatusBadGateway, "login failed")
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(TokenResponse{Token: token})
+	writeJSON(w, http.StatusOK, TokenResponse{Token: token})
 }
 
 // handleCreateTask godoc
@@ -117,18 +113,17 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
-// @Router /task [post]
+// @Router /tasks [post]
 func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	userID := r.Header.Get("X-User-ID")
-	if strings.TrimSpace(userID) == "" {
-		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+	userID, err := parseUserID(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	var req CreateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
@@ -136,15 +131,14 @@ func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("create task error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			writeError(w, te.StatusCode, te.Message)
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"create task failed: %s"}`, err.Error()), http.StatusBadGateway)
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("create task failed: %s", err.Error()))
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
+	writeJSON(w, http.StatusCreated, TaskResponse(*task))
 }
 
 // handleGetTasks godoc
@@ -158,10 +152,9 @@ func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 // @Failure 502 {object} ErrorResponse
 // @Router /tasks [get]
 func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	userID := r.Header.Get("X-User-ID")
-	if strings.TrimSpace(userID) == "" {
-		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+	userID, err := parseUserID(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -169,10 +162,10 @@ func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("get tasks error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			writeError(w, te.StatusCode, te.Message)
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"get tasks failed: %s"}`, err.Error()), http.StatusBadGateway)
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("get tasks failed: %s", err.Error()))
 		return
 	}
 
@@ -186,117 +179,115 @@ func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 		res = []TaskResponse{}
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(res)
+	writeJSON(w, http.StatusOK, res)
 }
 
 // handleGetTask godoc
-// @Summary Get tasks
-// @Description Get tasks belonging to the provided user and task id.
+// @Summary Get task
+// @Description Get a task belonging to the provided user.
 // @Tags tasks
 // @Produce json
 // @Param X-User-ID header string true "User ID"
 // @Param id path string true "Task ID"
-// @Success 200 {array} TaskResponse
+// @Success 200 {object} TaskResponse
 // @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
-// @Router /task/{id} [get]
+// @Router /tasks/{id} [get]
 func (h *Handler) handleGetTask(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	userID := r.Header.Get("X-User-ID")
-	taskId := r.PathValue("id")
-	if strings.TrimSpace(userID) == "" {
-		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+	userID, err := parseUserID(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
+	id := chi.URLParam(r, "id")
 
-	task, err := h.taskClient.GetTask(r.Context(), userID, taskId)
+	task, err := h.taskClient.GetTask(r.Context(), userID, id)
 	if err != nil {
 		log.Printf("get task error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			writeError(w, te.StatusCode, te.Message)
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"get task failed: %s"}`, err.Error()), http.StatusBadGateway)
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("get task failed: %s", err.Error()))
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
+	writeJSON(w, http.StatusOK, TaskResponse(*task))
 }
 
 // handleUpdateTask godoc
-// @Summary Update tasks
-// @Description Update tasks belonging to the provided user and task id.
+// @Summary Update task
+// @Description Update a task belonging to the provided user.
 // @Tags tasks
+// @Accept json
 // @Produce json
 // @Param X-User-ID header string true "User ID"
 // @Param id path string true "Task ID"
 // @Param request body UpdateTaskInput true "Task payload"
-// @Success 200 {array} TaskResponse
+// @Success 200 {object} TaskResponse
+// @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
-// @Router /task/{id} [put]
+// @Router /tasks/{id} [put]
 func (h *Handler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	userID := r.Header.Get("X-User-ID")
-	taskId := r.PathValue("id")
-	if strings.TrimSpace(userID) == "" {
-		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+	userID, err := parseUserID(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
+	id := chi.URLParam(r, "id")
 
 	var req UpdateTaskInput
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
-		return
-	}
-	task, err := h.taskClient.UpdateTask(r.Context(), userID, taskId, client.UpdateTaskInput(req))
-	if err != nil {
-		log.Printf("get task error: %v", err)
-		if te, ok := err.(*client.TaskError); ok {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
-			return
-		}
-		http.Error(w, fmt.Sprintf(`{"error":"get task failed: %s"}`, err.Error()), http.StatusBadGateway)
+		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
+	task, err := h.taskClient.UpdateTask(r.Context(), userID, id, client.UpdateTaskInput(req))
+	if err != nil {
+		log.Printf("update task error: %v", err)
+		if te, ok := err.(*client.TaskError); ok {
+			writeError(w, te.StatusCode, te.Message)
+			return
+		}
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("update task failed: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, TaskResponse(*task))
 }
 
 // handleDeleteTask godoc
-// @Summary Delete tasks
-// @Description Delete tasks belonging to the provided user and task id.
+// @Summary Delete task
+// @Description Delete a task belonging to the provided user.
 // @Tags tasks
 // @Produce json
 // @Param X-User-ID header string true "User ID"
 // @Param id path string true "Task ID"
-// @Success 200 {array} TaskResponse
+// @Success 204 {string} string "no content"
 // @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
-// @Router /task/{id} [delete]
+// @Router /tasks/{id} [delete]
 func (h *Handler) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	userID := r.Header.Get("X-User-ID")
-	taskId := r.PathValue("id")
-	if strings.TrimSpace(userID) == "" {
-		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+	userID, err := parseUserID(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
+	id := chi.URLParam(r, "id")
 
-	task, err := h.taskClient.DeleteTask(r.Context(), userID, taskId)
-	if err != nil {
+	if err := h.taskClient.DeleteTask(r.Context(), userID, id); err != nil {
 		log.Printf("delete task error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			writeError(w, te.StatusCode, te.Message)
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"delete task failed: %s"}`, err.Error()), http.StatusBadGateway)
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("delete task failed: %s", err.Error()))
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
+	w.WriteHeader(http.StatusNoContent)
 }

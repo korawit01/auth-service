@@ -3,9 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,16 +12,6 @@ import (
 	"github.com/korawit01/auth-service/services/task-service/internal/repository"
 	"github.com/korawit01/auth-service/services/task-service/internal/service"
 )
-
-var ErrUnauthorized = errors.New("unauthorized")
-
-func getUserIDFromHeader(r *http.Request) (string, error) {
-	idStr := r.Header.Get("X-User-ID")
-	if strings.TrimSpace(idStr) == "" {
-		return "", ErrUnauthorized
-	}
-	return idStr, nil
-}
 
 type TaskHandler struct {
 	svc service.TaskService
@@ -35,10 +23,10 @@ func NewTaskHandler(svc service.TaskService) *TaskHandler {
 
 func (h *TaskHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/tasks", h.listTasks)
-	r.Get("/task/{id}", h.getTask)
-	r.Post("/task", h.createTask)
-	r.Put("/task/{id}", h.updateTask)
-	r.Delete("/task/{id}", h.deleteTask)
+	r.Get("/tasks/{id}", h.getTask)
+	r.Post("/tasks", h.createTask)
+	r.Put("/tasks/{id}", h.updateTask)
+	r.Delete("/tasks/{id}", h.deleteTask)
 }
 
 type createTaskRequest struct {
@@ -56,24 +44,24 @@ type updateTaskRequest struct {
 }
 
 func (h *TaskHandler) listTasks(w http.ResponseWriter, r *http.Request) {
-	userID, err := getUserIDFromHeader(r)
+	userID, err := parseUserID(r)
 	if err != nil {
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
 
 	tasks, err := h.svc.ListTasks(r.Context(), userID)
 	if err != nil {
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
-	jsonResponse(w, http.StatusOK, tasks)
+	writeJSON(w, http.StatusOK, tasks)
 }
 
 func (h *TaskHandler) getTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := getUserIDFromHeader(r)
+	userID, err := parseUserID(r)
 	if err != nil {
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
 
@@ -81,29 +69,29 @@ func (h *TaskHandler) getTask(w http.ResponseWriter, r *http.Request) {
 	task, err := h.svc.GetTask(r.Context(), userID, idStr)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			httpErrorStatus(w, http.StatusNotFound, "task not found")
+			writeError(w, http.StatusNotFound, "task not found")
 			return
 		}
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
-	jsonResponse(w, http.StatusOK, task)
+	writeJSON(w, http.StatusOK, task)
 }
 
 func (h *TaskHandler) createTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := getUserIDFromHeader(r)
+	userID, err := parseUserID(r)
 	if err != nil {
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
 
 	var req createTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpErrorStatus(w, http.StatusBadRequest, "invalid JSON")
+		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 	if req.Title == "" {
-		httpErrorStatus(w, http.StatusBadRequest, "title is required")
+		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 
@@ -111,7 +99,7 @@ func (h *TaskHandler) createTask(w http.ResponseWriter, r *http.Request) {
 	if req.DueDate != nil && *req.DueDate != "" {
 		t, err := time.Parse(time.RFC3339, *req.DueDate)
 		if err != nil {
-			httpErrorStatus(w, http.StatusBadRequest, "invalid dueDate")
+			writeError(w, http.StatusBadRequest, "invalid dueDate")
 			return
 		}
 		due = &t
@@ -127,26 +115,26 @@ func (h *TaskHandler) createTask(w http.ResponseWriter, r *http.Request) {
 	task, err := h.svc.CreateTask(r.Context(), userID, input)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidStatus) {
-			httpErrorStatus(w, http.StatusBadRequest, err.Error())
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
-	jsonResponse(w, http.StatusCreated, task)
+	writeJSON(w, http.StatusCreated, task)
 }
 
 func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := getUserIDFromHeader(r)
+	userID, err := parseUserID(r)
 	if err != nil {
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
 	var req updateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpErrorStatus(w, http.StatusBadRequest, "invalid JSON")
+		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
@@ -157,7 +145,7 @@ func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
 		} else {
 			t, err := time.Parse(time.RFC3339, *req.DueDate)
 			if err != nil {
-				httpErrorStatus(w, http.StatusBadRequest, "invalid dueDate")
+				writeError(w, http.StatusBadRequest, "invalid dueDate")
 				return
 			}
 			due = &t
@@ -180,58 +168,34 @@ func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
 	task, err := h.svc.UpdateTask(r.Context(), userID, idStr, input)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			httpErrorStatus(w, http.StatusNotFound, "task not found")
+			writeError(w, http.StatusNotFound, "task not found")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidStatus) {
-			httpErrorStatus(w, http.StatusBadRequest, err.Error())
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
-	jsonResponse(w, http.StatusOK, task)
+	writeJSON(w, http.StatusOK, task)
 }
 
 func (h *TaskHandler) deleteTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := getUserIDFromHeader(r)
+	userID, err := parseUserID(r)
 	if err != nil {
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
 	if err := h.svc.DeleteTask(r.Context(), userID, idStr); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			httpErrorStatus(w, http.StatusNotFound, "task not found")
+			writeError(w, http.StatusNotFound, "task not found")
 			return
 		}
-		httpError(w, err)
+		handleError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// helpers for JSON responses
-
-func jsonResponse(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func httpError(w http.ResponseWriter, err error) {
-	if errors.Is(err, ErrUnauthorized) {
-		httpErrorStatus(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-	// Surface the actual error to aid debugging (consider tightening for prod).
-	log.Printf("handler error: %v", err)
-	httpErrorStatus(w, http.StatusInternalServerError, err.Error())
-}
-
-func httpErrorStatus(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

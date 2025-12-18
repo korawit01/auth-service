@@ -73,7 +73,7 @@ func (c *TaskClient) CreateTask(ctx context.Context, userID, title, description 
 	}
 	body, _ := json.Marshal(payload)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/task", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/tasks", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (c *TaskClient) GetTasks(ctx context.Context, userID string) (*[]TaskRespon
 
 func (c *TaskClient) GetTask(ctx context.Context, userID, taskId string) (*TaskResponse, error) {
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/task/"+taskId, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/tasks/"+taskId, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (c *TaskClient) UpdateTask(ctx context.Context, userID, taskId string, req 
 	}
 
 	body, _ := json.Marshal(payload)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/task/"+taskId, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/tasks/"+taskId, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -222,17 +222,17 @@ func (c *TaskClient) UpdateTask(ctx context.Context, userID, taskId string, req 
 	return &task, nil
 }
 
-func (c *TaskClient) DeleteTask(ctx context.Context, userID, taskId string) (*TaskResponse, error) {
+func (c *TaskClient) DeleteTask(ctx context.Context, userID, taskId string) error {
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/task/"+taskId, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/tasks/"+taskId, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", strings.TrimSpace(userID))
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -242,16 +242,11 @@ func (c *TaskClient) DeleteTask(ctx context.Context, userID, taskId string) (*Ta
 		if msg == "" {
 			msg = "task service returned empty body"
 		}
-		return nil, &TaskError{
+		return &TaskError{
 			StatusCode: resp.StatusCode,
 			Message:    fmt.Sprintf("task service error (%s): %s", resp.Status, msg),
 		}
 	}
 
-	var task TaskResponse
-	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
-		return nil, err
-	}
-
-	return &task, nil
+	return nil
 }
