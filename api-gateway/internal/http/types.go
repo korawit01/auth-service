@@ -17,6 +17,12 @@ type CreateTaskRequest struct {
 	Description string `json:"description" example:"Outline API contract and data model"`
 }
 
+type UpdateTaskInput struct {
+	Title       *string    `json:"title,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	Status      *string    `json:"status,omitempty"`
+	DueDate     *time.Time `json:"dueDate,omitempty"`
+}
 type TokenResponse struct {
 	Token string `json:"token"`
 }
@@ -34,4 +40,3 @@ type TaskResponse struct {
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 }
-

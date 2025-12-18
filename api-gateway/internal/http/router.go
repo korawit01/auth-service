@@ -34,9 +34,12 @@ func (h *Handler) Routes() http.Handler {
 
 	r.Post("/register", h.handleRegister)
 	r.Post("/login", h.handleLogin)
-	r.Post("/tasks", h.handleCreateTask)
+
+	r.Post("/task", h.handleCreateTask)
 	r.Get("/tasks", h.handleGetTasks)
 	r.Get("/task/{id}", h.handleGetTask)
+	r.Put("/task/{id}", h.handleUpdateTask)
+	r.Delete("/task/{id}", h.handleDeleteTask)
 
 	// Swagger docs (live generated from annotations)
 	r.Handle("/swagger/*", SwaggerRoutes())
@@ -187,9 +190,9 @@ func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(res)
 }
 
-// handleGetTasks godoc
-// @Summary List tasks
-// @Description List tasks belonging to the provided user.
+// handleGetTask godoc
+// @Summary Get tasks
+// @Description Get tasks belonging to the provided user and task id.
 // @Tags tasks
 // @Produce json
 // @Param X-User-ID header string true "User ID"
@@ -215,6 +218,82 @@ func (h *Handler) handleGetTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.Error(w, fmt.Sprintf(`{"error":"get task failed: %s"}`, err.Error()), http.StatusBadGateway)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
+}
+
+// handleUpdateTask godoc
+// @Summary Update tasks
+// @Description Update tasks belonging to the provided user and task id.
+// @Tags tasks
+// @Produce json
+// @Param X-User-ID header string true "User ID"
+// @Param id path string true "Task ID"
+// @Param request body UpdateTaskInput true "Task payload"
+// @Success 200 {array} TaskResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /task/{id} [put]
+func (h *Handler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Header.Get("X-User-ID")
+	taskId := r.PathValue("id")
+	if strings.TrimSpace(userID) == "" {
+		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateTaskInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+		return
+	}
+	task, err := h.taskClient.UpdateTask(r.Context(), userID, taskId, client.UpdateTaskInput(req))
+	if err != nil {
+		log.Printf("get task error: %v", err)
+		if te, ok := err.(*client.TaskError); ok {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"get task failed: %s"}`, err.Error()), http.StatusBadGateway)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
+}
+
+// handleDeleteTask godoc
+// @Summary Delete tasks
+// @Description Delete tasks belonging to the provided user and task id.
+// @Tags tasks
+// @Produce json
+// @Param X-User-ID header string true "User ID"
+// @Param id path string true "Task ID"
+// @Success 200 {array} TaskResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /task/{id} [delete]
+func (h *Handler) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Header.Get("X-User-ID")
+	taskId := r.PathValue("id")
+	if strings.TrimSpace(userID) == "" {
+		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+		return
+	}
+
+	task, err := h.taskClient.DeleteTask(r.Context(), userID, taskId)
+	if err != nil {
+		log.Printf("delete task error: %v", err)
+		if te, ok := err.(*client.TaskError); ok {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"delete task failed: %s"}`, err.Error()), http.StatusBadGateway)
 		return
 	}
 

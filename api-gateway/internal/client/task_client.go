@@ -27,6 +27,12 @@ func (e *TaskError) Error() string {
 	return e.Message
 }
 
+type UpdateTaskInput struct {
+	Title       *string    `json:"title,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	Status      *string    `json:"status,omitempty"`
+	DueDate     *time.Time `json:"dueDate,omitempty"`
+}
 type TaskResponse struct {
 	RowID       string     `json:"row_id"`
 	Title       string     `json:"title"`
@@ -67,7 +73,7 @@ func (c *TaskClient) CreateTask(ctx context.Context, userID, title, description 
 	}
 	body, _ := json.Marshal(payload)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/tasks", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/task", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -126,11 +132,11 @@ func (c *TaskClient) GetTasks(ctx context.Context, userID string) (*[]TaskRespon
 		}
 	}
 
-	var task[] TaskResponse
+	var task []TaskResponse
 	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
 		return nil, err
 	}
-	
+
 	return &task, nil
 }
 
@@ -164,6 +170,88 @@ func (c *TaskClient) GetTask(ctx context.Context, userID, taskId string) (*TaskR
 	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
 		return nil, err
 	}
-	
+
+	return &task, nil
+}
+
+func (c *TaskClient) UpdateTask(ctx context.Context, userID, taskId string, req UpdateTaskInput) (*TaskResponse, error) {
+	payload := make(map[string]interface{})
+	if req.Title != nil {
+		payload["title"] = *req.Title
+	}
+	if req.Description != nil {
+		payload["description"] = *req.Description
+	}
+	if req.Status != nil {
+		payload["status"] = string(*req.Status)
+	}
+	if req.DueDate != nil {
+		payload["dueDate"] = req.DueDate.Format(time.RFC3339)
+	}
+
+	body, _ := json.Marshal(payload)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/task/"+taskId, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-User-ID", strings.TrimSpace(userID))
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		msg := strings.TrimSpace(string(bodyBytes))
+		if msg == "" {
+			msg = "task service returned empty body"
+		}
+		return nil, &TaskError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("task service error (%s): %s", resp.Status, msg),
+		}
+	}
+
+	var task TaskResponse
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, err
+	}
+
+	return &task, nil
+}
+
+func (c *TaskClient) DeleteTask(ctx context.Context, userID, taskId string) (*TaskResponse, error) {
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/task/"+taskId, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", strings.TrimSpace(userID))
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		msg := strings.TrimSpace(string(bodyBytes))
+		if msg == "" {
+			msg = "task service returned empty body"
+		}
+		return nil, &TaskError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("task service error (%s): %s", resp.Status, msg),
+		}
+	}
+
+	var task TaskResponse
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, err
+	}
+
 	return &task, nil
 }
