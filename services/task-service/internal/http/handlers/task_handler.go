@@ -35,10 +35,10 @@ func NewTaskHandler(svc service.TaskService) *TaskHandler {
 
 func (h *TaskHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/tasks", h.listTasks)
-	r.Get("/tasks/{id}", h.getTask)
-	r.Post("/tasks", h.createTask)
-	r.Put("/tasks/{id}", h.updateTask)
-	r.Delete("/tasks/{id}", h.deleteTask)
+	r.Get("/task/{id}", h.getTask)
+	r.Post("/task", h.createTask)
+	r.Put("/task/{id}", h.updateTask)
+	r.Delete("/task/{id}", h.deleteTask)
 }
 
 type createTaskRequest struct {

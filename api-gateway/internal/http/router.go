@@ -36,6 +36,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/login", h.handleLogin)
 	r.Post("/tasks", h.handleCreateTask)
 	r.Get("/tasks", h.handleGetTasks)
+	r.Get("/task/{id}", h.handleGetTask)
 
 	// Swagger docs (live generated from annotations)
 	r.Handle("/swagger/*", SwaggerRoutes())
@@ -113,7 +114,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
-// @Router /tasks [post]
+// @Router /task [post]
 func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Header.Get("X-User-ID")
@@ -184,4 +185,39 @@ func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(res)
+}
+
+// handleGetTasks godoc
+// @Summary List tasks
+// @Description List tasks belonging to the provided user.
+// @Tags tasks
+// @Produce json
+// @Param X-User-ID header string true "User ID"
+// @Param id path string true "Task ID"
+// @Success 200 {array} TaskResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /task/{id} [get]
+func (h *Handler) handleGetTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Header.Get("X-User-ID")
+	taskId := r.PathValue("id")
+	if strings.TrimSpace(userID) == "" {
+		http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
+		return
+	}
+
+	task, err := h.taskClient.GetTask(r.Context(), userID, taskId)
+	if err != nil {
+		log.Printf("get task error: %v", err)
+		if te, ok := err.(*client.TaskError); ok {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, te.Message), te.StatusCode)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"get task failed: %s"}`, err.Error()), http.StatusBadGateway)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(TaskResponse(*task))
 }
