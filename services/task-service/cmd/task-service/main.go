@@ -21,6 +21,8 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
+	log.SetPrefix("task-service: ")
 	cfg := config.FromEnv()
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")

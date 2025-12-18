@@ -25,6 +25,8 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
+	log.SetPrefix("api-gateway: ")
 	addr := envOrDefault("GATEWAY_ADDR", ":8080")
 	authURL := envOrDefault("AUTH_SERVICE_URL", "http://localhost:8081/auth")
 	taskURL := envOrDefault("TASK_SERVICE_URL", "http://localhost:8082/api")
