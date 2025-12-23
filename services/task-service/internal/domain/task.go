@@ -5,9 +5,9 @@ import "time"
 type TaskStatus string
 
 const (
-	StatusTodo       TaskStatus = "todo"
-	StatusInProgress TaskStatus = "in_progress"
-	StatusDone       TaskStatus = "done"
+	StatusTodo       TaskStatus = "1"
+	StatusInProgress TaskStatus = "2"
+	StatusDone       TaskStatus = "3"
 )
 
 type Task struct {

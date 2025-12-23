@@ -15,6 +15,7 @@ type LoginRequest struct {
 type CreateTaskRequest struct {
 	Title       string `json:"title" example:"Write design doc"`
 	Description string `json:"description" example:"Outline API contract and data model"`
+	Status	  	string `json:"status" example:"1"`
 }
 
 type UpdateTaskInput struct {

@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log"
-	"net/http"
+	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -12,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/korawit01/auth-service/services/auth-service/internal/config"
@@ -53,18 +54,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r := chi.NewRouter()
-	r.Mount("/auth", h.Routes())
-
-	srv := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: r,
-	}
+	app := fiber.New()
+	h.RegisterRoutes(app.Group("/auth"))
 
 	// graceful shutdown
 	go func() {
 		log.Printf("auth-service listening on %s", cfg.Addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := app.Listen(cfg.Addr); err != nil && !isServerClosed(err) {
 			log.Fatal(err)
 		}
 	}()
@@ -76,7 +72,9 @@ func main() {
 	log.Println("shutting down server...")
 	ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelShutdown()
-	_ = srv.Shutdown(ctxShutdown)
+	if err := app.ShutdownWithContext(ctxShutdown); err != nil {
+		log.Printf("auth-service shutdown error: %v", err)
+	}
 }
 
 func ensureSchema(ctx context.Context, db *sql.DB) error {
@@ -102,4 +100,8 @@ func describeDSN(dsn string) string {
 		user = u.User.Username()
 	}
 	return "scheme=" + u.Scheme + " host=" + u.Host + " db=" + strings.TrimPrefix(u.Path, "/") + " user=" + user
+}
+
+func isServerClosed(err error) bool {
+	return errors.Is(err, net.ErrClosed) || strings.Contains(err.Error(), "Server closed")
 }

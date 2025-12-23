@@ -1,12 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
-	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 
 	"github.com/korawit01/auth-service/services/task-service/internal/domain"
 	"github.com/korawit01/auth-service/services/task-service/internal/repository"
@@ -21,12 +19,12 @@ func NewTaskHandler(svc service.TaskService) *TaskHandler {
 	return &TaskHandler{svc: svc}
 }
 
-func (h *TaskHandler) RegisterRoutes(r chi.Router) {
+func (h *TaskHandler) RegisterRoutes(r fiber.Router) {
 	r.Get("/tasks", h.listTasks)
-	r.Get("/tasks/{id}", h.getTask)
+	r.Get("/tasks/:id", h.getTask)
 	r.Post("/tasks", h.createTask)
-	r.Put("/tasks/{id}", h.updateTask)
-	r.Delete("/tasks/{id}", h.deleteTask)
+	r.Put("/tasks/:id", h.updateTask)
+	r.Delete("/tasks/:id", h.deleteTask)
 }
 
 type createTaskRequest struct {
@@ -43,64 +41,55 @@ type updateTaskRequest struct {
 	DueDate     *string `json:"dueDate"`
 }
 
-func (h *TaskHandler) listTasks(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *TaskHandler) listTasks(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
 
-	tasks, err := h.svc.ListTasks(r.Context(), userID)
+	tasks, err := h.svc.ListTasks(c.UserContext(), userID)
 	if err != nil {
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
-	writeJSON(w, http.StatusOK, tasks)
+	return writeJSON(c, fiber.StatusOK, tasks)
 }
 
-func (h *TaskHandler) getTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *TaskHandler) getTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
 
-	idStr := chi.URLParam(r, "id")
-	task, err := h.svc.GetTask(r.Context(), userID, idStr)
+	idStr := c.Params("id")
+	task, err := h.svc.GetTask(c.UserContext(), userID, idStr)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "task not found")
-			return
+			return writeError(c, fiber.StatusNotFound, "task not found")
 		}
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
-	writeJSON(w, http.StatusOK, task)
+	return writeJSON(c, fiber.StatusOK, task)
 }
 
-func (h *TaskHandler) createTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *TaskHandler) createTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
 
 	var req createTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON")
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, fiber.StatusBadRequest, "invalid JSON")
 	}
 	if req.Title == "" {
-		writeError(w, http.StatusBadRequest, "title is required")
-		return
+		return writeError(c, fiber.StatusBadRequest, "title is required")
 	}
 
 	var due *time.Time
 	if req.DueDate != nil && *req.DueDate != "" {
 		t, err := time.Parse(time.RFC3339, *req.DueDate)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid dueDate")
-			return
+			return writeError(c, fiber.StatusBadRequest, "invalid dueDate")
 		}
 		due = &t
 	}
@@ -112,30 +101,26 @@ func (h *TaskHandler) createTask(w http.ResponseWriter, r *http.Request) {
 		DueDate:     due,
 	}
 
-	task, err := h.svc.CreateTask(r.Context(), userID, input)
+	task, err := h.svc.CreateTask(c.UserContext(), userID, input)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidStatus) {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
+			return writeError(c, fiber.StatusBadRequest, err.Error())
 		}
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
-	writeJSON(w, http.StatusCreated, task)
+	return writeJSON(c, fiber.StatusCreated, task)
 }
 
-func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *TaskHandler) updateTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
 
-	idStr := chi.URLParam(r, "id")
+	idStr := c.Params("id")
 	var req updateTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON")
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, fiber.StatusBadRequest, "invalid JSON")
 	}
 
 	var due *time.Time
@@ -145,8 +130,7 @@ func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
 		} else {
 			t, err := time.Parse(time.RFC3339, *req.DueDate)
 			if err != nil {
-				writeError(w, http.StatusBadRequest, "invalid dueDate")
-				return
+				return writeError(c, fiber.StatusBadRequest, "invalid dueDate")
 			}
 			due = &t
 		}
@@ -165,37 +149,31 @@ func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
 		DueDate:     due,
 	}
 
-	task, err := h.svc.UpdateTask(r.Context(), userID, idStr, input)
+	task, err := h.svc.UpdateTask(c.UserContext(), userID, idStr, input)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "task not found")
-			return
+			return writeError(c, fiber.StatusNotFound, "task not found")
 		}
 		if errors.Is(err, service.ErrInvalidStatus) {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
+			return writeError(c, fiber.StatusBadRequest, err.Error())
 		}
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
-	writeJSON(w, http.StatusOK, task)
+	return writeJSON(c, fiber.StatusOK, task)
 }
 
-func (h *TaskHandler) deleteTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *TaskHandler) deleteTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
 
-	idStr := chi.URLParam(r, "id")
-	if err := h.svc.DeleteTask(r.Context(), userID, idStr); err != nil {
+	idStr := c.Params("id")
+	if err := h.svc.DeleteTask(c.UserContext(), userID, idStr); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "task not found")
-			return
+			return writeError(c, fiber.StatusNotFound, "task not found")
 		}
-		handleError(w, err)
-		return
+		return handleError(c, err)
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }

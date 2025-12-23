@@ -1,13 +1,14 @@
 package http
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
 
 	"github.com/korawit01/auth-service/api-gateway/internal/client"
 )
@@ -24,15 +25,18 @@ func NewHandler(authClient *client.AuthClient, taskClient *client.TaskClient) *H
 	}
 }
 
-func (h *Handler) Routes() http.Handler {
-	r := chi.NewRouter()
+func (h *Handler) RegisterRoutes(r fiber.Router) {
+	r.Use(requestid.New())
+	r.Use(logger.New())
+	r.Use(recover.New())
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+		AllowHeaders: "Content-Type, Authorization, X-User-ID",
+	}))
 
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	r.Get("/health", func(c *fiber.Ctx) error {
+		return writeJSON(c, fiber.StatusOK, map[string]string{"status": "ok"})
 	})
 
 	r.Post("/register", h.handleRegister)
@@ -40,14 +44,12 @@ func (h *Handler) Routes() http.Handler {
 
 	r.Post("/tasks", h.handleCreateTask)
 	r.Get("/tasks", h.handleGetTasks)
-	r.Get("/tasks/{id}", h.handleGetTask)
-	r.Put("/tasks/{id}", h.handleUpdateTask)
-	r.Delete("/tasks/{id}", h.handleDeleteTask)
+	r.Get("/tasks/:id", h.handleGetTask)
+	r.Put("/tasks/:id", h.handleUpdateTask)
+	r.Delete("/tasks/:id", h.handleDeleteTask)
 
 	// Swagger docs (live generated from annotations)
-	r.Handle("/swagger/*", SwaggerRoutes())
-
-	return r
+	r.Get("/swagger/*", SwaggerRoutes())
 }
 
 // handleRegister godoc
@@ -61,21 +63,19 @@ func (h *Handler) Routes() http.Handler {
 // @Failure 400 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /register [post]
-func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleRegister(c *fiber.Ctx) error {
 	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad request")
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, fiber.StatusBadRequest, "bad request")
 	}
 
-	user, err := h.authClient.Register(r.Context(), req.Email, req.Password)
+	user, err := h.authClient.Register(c.UserContext(), req.Email, req.Password)
 	if err != nil {
 		log.Printf("register error: %v", err)
-		writeError(w, http.StatusBadGateway, "register failed")
-		return
+		return writeError(c, fiber.StatusBadGateway, "register failed")
 	}
 
-	writeJSON(w, http.StatusOK, user)
+	return writeJSON(c, fiber.StatusOK, user)
 }
 
 // handleLogin godoc
@@ -89,21 +89,19 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /login [post]
-func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleLogin(c *fiber.Ctx) error {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad request")
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, fiber.StatusBadRequest, "bad request")
 	}
 
-	token, err := h.authClient.Login(r.Context(), req.Email, req.Password)
+	token, err := h.authClient.Login(c.UserContext(), req.Email, req.Password)
 	if err != nil {
 		log.Printf("login error: %v", err)
-		writeError(w, http.StatusBadGateway, "login failed")
-		return
+		return writeError(c, fiber.StatusBadGateway, "login failed")
 	}
 
-	writeJSON(w, http.StatusOK, TokenResponse{Token: token})
+	return writeJSON(c, fiber.StatusOK, TokenResponse{Token: token})
 }
 
 // handleCreateTask godoc
@@ -119,31 +117,27 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /tasks [post]
-func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *Handler) handleCreateTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
-		return
+		return writeError(c, fiber.StatusUnauthorized, err.Error())
 	}
 
 	var req CreateTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad request")
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, fiber.StatusBadRequest, "bad request")
 	}
 
-	task, err := h.taskClient.CreateTask(r.Context(), userID, req.Title, req.Description)
+	task, err := h.taskClient.CreateTask(c.UserContext(), userID, req.Title, req.Description, req.Status)
 	if err != nil {
 		log.Printf("create task error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			writeError(w, te.StatusCode, te.Message)
-			return
+			return writeError(c, te.StatusCode, te.Message)
 		}
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("create task failed: %s", err.Error()))
-		return
+		return writeError(c, fiber.StatusBadGateway, fmt.Sprintf("create task failed: %s", err.Error()))
 	}
 
-	writeJSON(w, http.StatusCreated, TaskResponse(*task))
+	return writeJSON(c, fiber.StatusCreated, TaskResponse(*task))
 }
 
 // handleGetTasks godoc
@@ -156,22 +150,19 @@ func (h *Handler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /tasks [get]
-func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *Handler) handleGetTasks(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
-		return
+		return writeError(c, fiber.StatusUnauthorized, err.Error())
 	}
 
-	task, err := h.taskClient.GetTasks(r.Context(), userID)
+	task, err := h.taskClient.GetTasks(c.UserContext(), userID)
 	if err != nil {
 		log.Printf("get tasks error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			writeError(w, te.StatusCode, te.Message)
-			return
+			return writeError(c, te.StatusCode, te.Message)
 		}
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("get tasks failed: %s", err.Error()))
-		return
+		return writeError(c, fiber.StatusBadGateway, fmt.Sprintf("get tasks failed: %s", err.Error()))
 	}
 
 	var res []TaskResponse
@@ -184,7 +175,7 @@ func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 		res = []TaskResponse{}
 	}
 
-	writeJSON(w, http.StatusOK, res)
+	return writeJSON(c, fiber.StatusOK, res)
 }
 
 // handleGetTask godoc
@@ -199,26 +190,23 @@ func (h *Handler) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /tasks/{id} [get]
-func (h *Handler) handleGetTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *Handler) handleGetTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
-		return
+		return writeError(c, fiber.StatusUnauthorized, err.Error())
 	}
-	id := chi.URLParam(r, "id")
+	id := c.Params("id")
 
-	task, err := h.taskClient.GetTask(r.Context(), userID, id)
+	task, err := h.taskClient.GetTask(c.UserContext(), userID, id)
 	if err != nil {
 		log.Printf("get task error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			writeError(w, te.StatusCode, te.Message)
-			return
+			return writeError(c, te.StatusCode, te.Message)
 		}
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("get task failed: %s", err.Error()))
-		return
+		return writeError(c, fiber.StatusBadGateway, fmt.Sprintf("get task failed: %s", err.Error()))
 	}
 
-	writeJSON(w, http.StatusOK, TaskResponse(*task))
+	return writeJSON(c, fiber.StatusOK, TaskResponse(*task))
 }
 
 // handleUpdateTask godoc
@@ -236,32 +224,28 @@ func (h *Handler) handleGetTask(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /tasks/{id} [put]
-func (h *Handler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *Handler) handleUpdateTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
-		return
+		return writeError(c, fiber.StatusUnauthorized, err.Error())
 	}
-	id := chi.URLParam(r, "id")
+	id := c.Params("id")
 
 	var req UpdateTaskInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad request")
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, fiber.StatusBadRequest, "bad request")
 	}
 
-	task, err := h.taskClient.UpdateTask(r.Context(), userID, id, client.UpdateTaskInput(req))
+	task, err := h.taskClient.UpdateTask(c.UserContext(), userID, id, client.UpdateTaskInput(req))
 	if err != nil {
 		log.Printf("update task error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			writeError(w, te.StatusCode, te.Message)
-			return
+			return writeError(c, te.StatusCode, te.Message)
 		}
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("update task failed: %s", err.Error()))
-		return
+		return writeError(c, fiber.StatusBadGateway, fmt.Sprintf("update task failed: %s", err.Error()))
 	}
 
-	writeJSON(w, http.StatusOK, TaskResponse(*task))
+	return writeJSON(c, fiber.StatusOK, TaskResponse(*task))
 }
 
 // handleDeleteTask godoc
@@ -276,23 +260,20 @@ func (h *Handler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Router /tasks/{id} [delete]
-func (h *Handler) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseUserID(r)
+func (h *Handler) handleDeleteTask(c *fiber.Ctx) error {
+	userID, err := parseUserID(c)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
-		return
+		return writeError(c, fiber.StatusUnauthorized, err.Error())
 	}
-	id := chi.URLParam(r, "id")
+	id := c.Params("id")
 
-	if err := h.taskClient.DeleteTask(r.Context(), userID, id); err != nil {
+	if err := h.taskClient.DeleteTask(c.UserContext(), userID, id); err != nil {
 		log.Printf("delete task error: %v", err)
 		if te, ok := err.(*client.TaskError); ok {
-			writeError(w, te.StatusCode, te.Message)
-			return
+			return writeError(c, te.StatusCode, te.Message)
 		}
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("delete task failed: %s", err.Error()))
-		return
+		return writeError(c, fiber.StatusBadGateway, fmt.Sprintf("delete task failed: %s", err.Error()))
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }

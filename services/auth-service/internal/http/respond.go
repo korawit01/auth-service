@@ -1,16 +1,11 @@
 package http
 
-import (
-	"encoding/json"
-	"net/http"
-)
+import "github.com/gofiber/fiber/v2"
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+func writeJSON(c *fiber.Ctx, status int, v interface{}) error {
+	return c.Status(status).JSON(v)
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+func writeError(c *fiber.Ctx, status int, msg string) error {
+	return writeJSON(c, status, map[string]string{"error": msg})
 }

@@ -9,15 +9,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
-	"net/http"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 
 	"github.com/korawit01/auth-service/api-gateway/internal/client"
 	myhttp "github.com/korawit01/auth-service/api-gateway/internal/http"
@@ -35,20 +36,15 @@ func main() {
 	taskClient := client.NewTaskClient(taskURL)
 	handler := myhttp.NewHandler(authClient, taskClient)
 
-	r := chi.NewRouter()
-	r.Mount("/", handler.Routes())
-
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: r,
-	}
+	app := fiber.New()
+	handler.RegisterRoutes(app)
 
 	docs.SwaggerInfo.BasePath = "/"
 	docs.SwaggerInfo.Host = swaggerHost(addr)
 
 	go func() {
 		log.Printf("api-gateway listening on %s", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := app.Listen(addr); err != nil && !isServerClosed(err) {
 			log.Fatal(err)
 		}
 	}()
@@ -61,7 +57,9 @@ func main() {
 	defer cancel()
 
 	log.Println("shutting down api-gateway...")
-	_ = srv.Shutdown(ctx)
+	if err := app.ShutdownWithContext(ctx); err != nil {
+		log.Printf("api-gateway shutdown error: %v", err)
+	}
 }
 
 func envOrDefault(key, def string) string {
@@ -88,4 +86,8 @@ func swaggerHost(addr string) string {
 		return "localhost:8080"
 	}
 	return "localhost:" + trimmed
+}
+
+func isServerClosed(err error) bool {
+	return errors.Is(err, net.ErrClosed) || strings.Contains(err.Error(), "Server closed")
 }

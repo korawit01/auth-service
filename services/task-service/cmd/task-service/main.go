@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log"
-	"net/http"
+	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/korawit01/auth-service/services/task-service/internal/config"
@@ -42,17 +44,12 @@ func main() {
 	taskSvc := service.NewTaskService(taskRepo)
 	taskHandler := handlers.NewTaskHandler(taskSvc)
 
-	r := chi.NewRouter()
-	r.Mount("/api", myhttp.NewRouter(taskHandler))
-
-	srv := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: r,
-	}
+	app := fiber.New()
+	myhttp.RegisterRoutes(app.Group("/api"), taskHandler)
 
 	go func() {
 		log.Println("task-service listening on", cfg.Addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := app.Listen(cfg.Addr); err != nil && !isServerClosed(err) {
 			log.Fatal(err)
 		}
 	}()
@@ -64,5 +61,11 @@ func main() {
 	log.Println("shutting down task-service...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = srv.Shutdown(ctx)
+	if err := app.ShutdownWithContext(ctx); err != nil {
+		log.Printf("task-service shutdown error: %v", err)
+	}
+}
+
+func isServerClosed(err error) bool {
+	return errors.Is(err, net.ErrClosed) || strings.Contains(err.Error(), "Server closed")
 }

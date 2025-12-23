@@ -66,10 +66,11 @@ func (c *TaskClient) Health(ctx context.Context) error {
 	return nil
 }
 
-func (c *TaskClient) CreateTask(ctx context.Context, userID, title, description string) (*TaskResponse, error) {
+func (c *TaskClient) CreateTask(ctx context.Context, userID, title, description, status string) (*TaskResponse, error) {
 	payload := map[string]string{
 		"title":       title,
 		"description": description,
+		"status":      status,
 	}
 	body, _ := json.Marshal(payload)
 

@@ -1,12 +1,12 @@
 package http
 
 import (
-	"encoding/json"
 	"log"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
 
 	"github.com/korawit01/auth-service/services/auth-service/internal/service"
 )
@@ -19,17 +19,13 @@ func NewHandler(userSvc service.UserService) *Handler {
 	return &Handler{userSvc: userSvc}
 }
 
-func (h *Handler) Routes() http.Handler {
-	r := chi.NewRouter()
-
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+func (h *Handler) RegisterRoutes(r fiber.Router) {
+	r.Use(requestid.New())
+	r.Use(logger.New())
+	r.Use(recover.New())
 
 	r.Post("/register", h.handleRegister)
 	r.Post("/login", h.handleLogin)
-
-	return r
 }
 
 type registerRequest struct {
@@ -42,40 +38,36 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleRegister(c *fiber.Ctx) error {
 	var req registerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := c.BodyParser(&req); err != nil {
 		log.Printf("register decode error: %v", err)
-		writeError(w, http.StatusBadRequest, "bad request")
-		return
+		return writeError(c, fiber.StatusBadRequest, "bad request")
 	}
 
-	user, err := h.userSvc.Register(r.Context(), req.Email, req.Password)
+	user, err := h.userSvc.Register(c.UserContext(), req.Email, req.Password)
 	if err != nil {
 		log.Printf("register service error: %v", err)
-		writeError(w, http.StatusInternalServerError, "cannot create user")
-		return
+		return writeError(c, fiber.StatusInternalServerError, "cannot create user")
 	}
 
 	// avoid sending hashed password back to clients
 	user.Password = ""
-	writeJSON(w, http.StatusCreated, user)
+	return writeJSON(c, fiber.StatusCreated, user)
 }
 
-func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleLogin(c *fiber.Ctx) error {
 	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := c.BodyParser(&req); err != nil {
 		log.Printf("login decode error: %v", err)
-		writeError(w, http.StatusBadRequest, "bad request")
-		return
+		return writeError(c, fiber.StatusBadRequest, "bad request")
 	}
 
-	token, err := h.userSvc.Login(r.Context(), req.Email, req.Password)
+	token, err := h.userSvc.Login(c.UserContext(), req.Email, req.Password)
 	if err != nil {
 		log.Printf("login service error: %v", err)
-		writeError(w, http.StatusUnauthorized, "invalid credentials")
-		return
+		return writeError(c, fiber.StatusUnauthorized, "invalid credentials")
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"token": token})
+	return writeJSON(c, fiber.StatusOK, map[string]string{"token": token})
 }

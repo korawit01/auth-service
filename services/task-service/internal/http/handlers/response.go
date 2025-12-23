@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
-	"net/http"
 	"strings"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 var (
@@ -13,29 +13,26 @@ var (
 	ErrUnauthorized  = errors.New("unauthorized")
 )
 
-func parseUserID(r *http.Request) (string, error) {
-	id := strings.TrimSpace(r.Header.Get("X-User-ID"))
+func parseUserID(c *fiber.Ctx) (string, error) {
+	id := strings.TrimSpace(c.Get("X-User-ID"))
 	if id == "" {
 		return "", ErrUnauthorized
 	}
 	return id, nil
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+func writeJSON(c *fiber.Ctx, status int, v interface{}) error {
+	return c.Status(status).JSON(v)
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+func writeError(c *fiber.Ctx, status int, msg string) error {
+	return writeJSON(c, status, map[string]string{"error": msg})
 }
 
-func handleError(w http.ResponseWriter, err error) {
+func handleError(c *fiber.Ctx, err error) error {
 	if errors.Is(err, ErrUnauthorized) {
-		writeError(w, http.StatusUnauthorized, err.Error())
-		return
+		return writeError(c, fiber.StatusUnauthorized, err.Error())
 	}
 	log.Printf("handler error: %v", err)
-	writeError(w, http.StatusInternalServerError, err.Error())
+	return writeError(c, fiber.StatusInternalServerError, err.Error())
 }
