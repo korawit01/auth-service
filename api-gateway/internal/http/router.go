@@ -42,11 +42,12 @@ func (h *Handler) RegisterRoutes(r fiber.Router) {
 	r.Post("/register", h.handleRegister)
 	r.Post("/login", h.handleLogin)
 
-	r.Post("/tasks", h.handleCreateTask)
-	r.Get("/tasks", h.handleGetTasks)
-	r.Get("/tasks/:id", h.handleGetTask)
-	r.Put("/tasks/:id", h.handleUpdateTask)
-	r.Delete("/tasks/:id", h.handleDeleteTask)
+	secured := r.Group("/", h.requireAuth)
+	secured.Post("/tasks", h.handleCreateTask)
+	secured.Get("/tasks", h.handleGetTasks)
+	secured.Get("/tasks/:id", h.handleGetTask)
+	secured.Put("/tasks/:id", h.handleUpdateTask)
+	secured.Delete("/tasks/:id", h.handleDeleteTask)
 
 	// Swagger docs (live generated from annotations)
 	r.Get("/swagger/*", SwaggerRoutes())
@@ -110,7 +111,7 @@ func (h *Handler) handleLogin(c *fiber.Ctx) error {
 // @Tags tasks
 // @Accept json
 // @Produce json
-// @Param X-User-ID header string true "User ID"
+// @Param Authorization header string true "Bearer token"
 // @Param request body CreateTaskRequest true "Task payload"
 // @Success 201 {object} TaskResponse
 // @Failure 400 {object} ErrorResponse
@@ -145,7 +146,7 @@ func (h *Handler) handleCreateTask(c *fiber.Ctx) error {
 // @Description List tasks belonging to the provided user.
 // @Tags tasks
 // @Produce json
-// @Param X-User-ID header string true "User ID"
+// @Param Authorization header string true "Bearer token"
 // @Success 200 {array} TaskResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
@@ -183,7 +184,7 @@ func (h *Handler) handleGetTasks(c *fiber.Ctx) error {
 // @Description Get a task belonging to the provided user.
 // @Tags tasks
 // @Produce json
-// @Param X-User-ID header string true "User ID"
+// @Param Authorization header string true "Bearer token"
 // @Param id path string true "Task ID"
 // @Success 200 {object} TaskResponse
 // @Failure 401 {object} ErrorResponse
@@ -215,7 +216,7 @@ func (h *Handler) handleGetTask(c *fiber.Ctx) error {
 // @Tags tasks
 // @Accept json
 // @Produce json
-// @Param X-User-ID header string true "User ID"
+// @Param Authorization header string true "Bearer token"
 // @Param id path string true "Task ID"
 // @Param request body UpdateTaskInput true "Task payload"
 // @Success 200 {object} TaskResponse
@@ -253,7 +254,7 @@ func (h *Handler) handleUpdateTask(c *fiber.Ctx) error {
 // @Description Delete a task belonging to the provided user.
 // @Tags tasks
 // @Produce json
-// @Param X-User-ID header string true "User ID"
+// @Param Authorization header string true "Bearer token"
 // @Param id path string true "Task ID"
 // @Success 204 {string} string "no content"
 // @Failure 401 {object} ErrorResponse

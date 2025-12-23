@@ -22,6 +22,11 @@ type UserResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type VerifyResponse struct {
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
+}
+
 func NewAuthClient(baseURL string) *AuthClient {
 	return &AuthClient{
 		baseURL:    strings.TrimRight(baseURL, "/"),
@@ -91,4 +96,29 @@ func (c *AuthClient) Login(ctx context.Context, email, password string) (string,
 		return "", err
 	}
 	return result.Token, nil
+}
+
+func (c *AuthClient) VerifyToken(ctx context.Context, token string) (*VerifyResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/verify", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("verify failed: %s: %s", resp.Status, strings.TrimSpace(string(bodyBytes)))
+	}
+
+	var result VerifyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

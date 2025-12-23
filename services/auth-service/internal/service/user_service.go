@@ -13,6 +13,7 @@ import (
 type UserService interface {
 	Register(ctx context.Context, email, password string) (*domain.User, error)
 	Login(ctx context.Context, email, password string) (string, error) // return JWT
+	VerifyToken(ctx context.Context, tokenStr string) (*token.Claims, error)
 }
 
 type userService struct {
@@ -52,4 +53,9 @@ func (s *userService) Login(ctx context.Context, email, password string) (string
 
 	// build JWT token for the authenticated user
 	return s.tokenProv.Generate(u.RowId, u.Email)
+}
+
+func (s *userService) VerifyToken(ctx context.Context, tokenStr string) (*token.Claims, error) {
+	_ = ctx
+	return s.tokenProv.Verify(tokenStr)
 }

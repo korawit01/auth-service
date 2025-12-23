@@ -7,12 +7,21 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-var ErrMissingUserID = errors.New("missing X-User-ID")
+var ErrUnauthorized = errors.New("unauthorized")
 
 func parseUserID(c *fiber.Ctx) (string, error) {
+	if v := c.Locals("userID"); v != nil {
+		if userID, ok := v.(string); ok {
+			userID = strings.TrimSpace(userID)
+			if userID != "" {
+				return userID, nil
+			}
+		}
+	}
+
 	userID := strings.TrimSpace(c.Get("X-User-ID"))
 	if userID == "" {
-		return "", ErrMissingUserID
+		return "", ErrUnauthorized
 	}
 	return userID, nil
 }

@@ -2,6 +2,7 @@ package http
 
 import (
 	"log"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -26,6 +27,7 @@ func (h *Handler) RegisterRoutes(r fiber.Router) {
 
 	r.Post("/register", h.handleRegister)
 	r.Post("/login", h.handleLogin)
+	r.Get("/verify", h.handleVerify)
 }
 
 type registerRequest struct {
@@ -70,4 +72,37 @@ func (h *Handler) handleLogin(c *fiber.Ctx) error {
 	}
 
 	return writeJSON(c, fiber.StatusOK, map[string]string{"token": token})
+}
+
+func (h *Handler) handleVerify(c *fiber.Ctx) error {
+	tokenStr := readBearerToken(c)
+	if tokenStr == "" {
+		return writeError(c, fiber.StatusUnauthorized, "missing token")
+	}
+
+	claims, err := h.userSvc.VerifyToken(c.UserContext(), tokenStr)
+	if err != nil {
+		log.Printf("verify token error: %v", err)
+		return writeError(c, fiber.StatusUnauthorized, "invalid token")
+	}
+
+	return writeJSON(c, fiber.StatusOK, map[string]string{
+		"user_id": claims.UserID,
+		"email":   claims.Email,
+	})
+}
+
+func readBearerToken(c *fiber.Ctx) string {
+	authHeader := strings.TrimSpace(c.Get("Authorization"))
+	if authHeader == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(authHeader)
+	const prefix = "bearer "
+	if !strings.HasPrefix(lower, prefix) {
+		return ""
+	}
+
+	return strings.TrimSpace(authHeader[len(prefix):])
 }
