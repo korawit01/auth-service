@@ -25,12 +25,12 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 	log.SetPrefix("task-service: ")
-	cfg := config.FromEnv()
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config load failed: %v", err)
 	}
 
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	db, err := sql.Open("pgx", cfg.DB.URL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,8 +48,8 @@ func main() {
 	myhttp.RegisterRoutes(app.Group("/api"), taskHandler)
 
 	go func() {
-		log.Println("task-service listening on", cfg.Addr)
-		if err := app.Listen(cfg.Addr); err != nil && !isServerClosed(err) {
+		log.Println("task-service listening on", cfg.HTTP.Addr)
+		if err := app.Listen(cfg.HTTP.Addr); err != nil && !isServerClosed(err) {
 			log.Fatal(err)
 		}
 	}()

@@ -26,13 +26,13 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 	log.SetPrefix("auth-service: ")
-	cfg := config.FromEnv()
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config load failed: %v", err)
 	}
 
-	log.Printf("connecting to database (%s)", describeDSN(cfg.DatabaseURL))
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	log.Printf("connecting to database (%s)", describeDSN(cfg.DB.URL))
+	db, err := sql.Open("pgx", cfg.DB.URL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepo(db)
-	tokenProv := token.NewJWTProvider(cfg.JWTSecret)
+	tokenProv := token.NewJWTProvider(cfg.JWT.Secret)
 	userSvc := service.NewUserService(userRepo, tokenProv)
 	h := myhttp.NewHandler(userSvc)
 
@@ -59,8 +59,8 @@ func main() {
 
 	// graceful shutdown
 	go func() {
-		log.Printf("auth-service listening on %s", cfg.Addr)
-		if err := app.Listen(cfg.Addr); err != nil && !isServerClosed(err) {
+		log.Printf("auth-service listening on %s", cfg.HTTP.Addr)
+		if err := app.Listen(cfg.HTTP.Addr); err != nil && !isServerClosed(err) {
 			log.Fatal(err)
 		}
 	}()

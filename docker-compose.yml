@@ -36,9 +36,9 @@ services:
       context: .
       dockerfile: Dockerfile.auth-service
     environment:
-      AUTH_HTTP_ADDR: ":8081"
-      DATABASE_URL: "postgres://postgres:postgres@db:5432/go_micro_task_board?sslmode=disable"
-      JWT_SECRET: "dev-secret"
+      TASKBOARD_HTTP_ADDR: ":8081"
+      TASKBOARD_DB_URL: "postgres://postgres:postgres@db:5432/go_micro_task_board?sslmode=disable"
+      TASKBOARD_JWT_SECRET: "dev-secret"
     depends_on:
       db:
         condition: service_healthy
@@ -52,8 +52,8 @@ services:
       context: .
       dockerfile: Dockerfile.task-service
     environment:
-      TASK_HTTP_ADDR: ":8082"
-      DATABASE_URL: "postgres://postgres:postgres@db:5432/go_micro_task_board?sslmode=disable"
+      TASKBOARD_HTTP_ADDR: ":8082"
+      TASKBOARD_DB_URL: "postgres://postgres:postgres@db:5432/go_micro_task_board?sslmode=disable"
     depends_on:
       db:
         condition: service_healthy

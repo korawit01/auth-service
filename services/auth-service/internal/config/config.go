@@ -1,46 +1,78 @@
 package config
 
 import (
-	"os"
+	"fmt"
+	"net/url"
+	"strings"
 
-	"github.com/subosito/gotenv"
+	"github.com/spf13/viper"
 )
+
+const defaultDBURL = "postgres://postgres:postgres@localhost:5432/go_micro_task_board?sslmode=disable"
 
 // Config holds runtime configuration for the auth service.
 type Config struct {
-	Addr        string
-	DatabaseURL string
-	JWTSecret   string
+	HTTP HTTPConfig `mapstructure:"http"`
+	DB   DBConfig   `mapstructure:"db"`
+	JWT  JWTConfig  `mapstructure:"jwt"`
 }
 
-// FromEnv builds a Config using environment variables with sensible defaults.
-// It attempts to load .env files from common locations so that `go run` works
-// whether you execute from the repo root or the service directory.
-func FromEnv() Config {
-	loadEnvFiles()
-
-	return Config{
-		Addr:        envOrDefault("AUTH_HTTP_ADDR", ":8081"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		JWTSecret:   os.Getenv("JWT_SECRET"),
-	}
+type HTTPConfig struct {
+	Addr string `mapstructure:"addr"`
 }
 
-func loadEnvFiles() {
-	paths := []string{
-		".env",
-		"services/auth-service/.env",
-		"../.env",
-		"../../.env",
-	}
-	for _, p := range paths {
-		_ = gotenv.Load(p)
-	}
+type DBConfig struct {
+	URL string `mapstructure:"url"`
 }
 
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+type JWTConfig struct {
+	Secret string `mapstructure:"secret"`
+}
+
+// Load reads configuration using defaults, optional config.yaml, and TASKBOARD_ env overrides.
+func Load() (Config, error) {
+	v := viper.New()
+	v.SetDefault("http.addr", ":8081")
+	v.SetDefault("db.url", defaultDBURL)
+	v.SetDefault("jwt.secret", "dev-secret")
+
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+	v.AddConfigPath(".")
+
+	v.SetEnvPrefix("TASKBOARD")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return Config{}, fmt.Errorf("read config.yaml: %w", err)
+		}
 	}
-	return def
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return Config{}, fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+
+	return cfg, nil
+}
+
+// Validate ensures required fields are present and well-formed.
+func (c Config) Validate() error {
+	if strings.TrimSpace(c.DB.URL) == "" {
+		return fmt.Errorf("db.url is required")
+	}
+	parsed, err := url.Parse(c.DB.URL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("db.url must be a valid URL")
+	}
+	if strings.TrimSpace(c.HTTP.Addr) == "" {
+		return fmt.Errorf("http.addr is required")
+	}
+	return nil
 }

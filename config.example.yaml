@@ -1,0 +1,6 @@
+http:
+  addr: ":8081"
+db:
+  url: "postgres://postgres:postgres@localhost:5432/go_micro_task_board?sslmode=disable"
+jwt:
+  secret: "dev-secret"
